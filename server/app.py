@@ -57,3 +57,16 @@ def state():
         return env.state().model_dump()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+def main():
+    import uvicorn
+    uvicorn.run(
+        "server.app:app",
+        host="0.0.0.0",
+        port=7860,
+        reload=False,
+    )
+
+
+if __name__ == "__main__":
+    main()
