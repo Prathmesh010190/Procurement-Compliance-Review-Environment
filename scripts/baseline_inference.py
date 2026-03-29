@@ -1,147 +1,118 @@
+"""
+Baseline inference script for Procurement Compliance Review Environment.
+Uses hand-coded policy rules. No LLM needed.
+Reproducible and deterministic.
+"""
+
 import json
 import sys
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.append(str(ROOT_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from client import ProcurementComplianceEnv
-from models import ProcurementAction
+
+ENV_URL = "http://localhost:7860"
 
 
-BASE_URL = "http://127.0.0.1:8000"
-TASKS_PATH = ROOT_DIR / "data" / "tasks.json"
+def load_task_ids():
+    tasks_path = Path(__file__).resolve().parent.parent / "data" / "tasks.json"
+    with open(tasks_path, "r", encoding="utf-8") as f:
+        tasks = json.load(f)
+    return [t["id"] for t in tasks]
 
 
-def load_tasks():
-    with open(TASKS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+def rule_based_decision(obs):
+    amount = obs.get("amount_usd", 0)
+    budget = obs.get("budget_remaining_usd", 0)
+    vendor = obs.get("vendor_status", "")
+    manager = obs.get("manager_approval", False)
+    finance = obs.get("finance_approval", False)
+    security = obs.get("security_review", False)
+    item_type = obs.get("item_type", "").lower()
 
+    route_to = []
+    missing = []
+    policy = "compliant"
+    risk = "low"
 
-def predict_action(observation):
-    missing_requirements = []
+    if not manager:
+        route_to.append("manager")
+        missing.append("manager approval")
+        policy = "non_compliant"
 
-    amount = observation.amount_usd
-    budget = observation.budget_remaining_usd
-    vendor_status = observation.vendor_status
-    manager_approval = observation.manager_approval
-    finance_approval = observation.finance_approval
-    security_review = observation.security_review
-    item_type = observation.item_type
+    if amount > 5000 and not finance:
+        route_to.append("finance")
+        missing.append("finance approval")
+        policy = "non_compliant"
 
-    if not manager_approval:
-        missing_requirements.append("manager_approval")
+    if item_type in ["software", "cloud service", "saas"] and not security:
+        route_to.append("security")
+        missing.append("security review")
+        if policy == "compliant":
+            policy = "partial"
 
-    if amount > 5000 and not finance_approval:
-        missing_requirements.append("finance_approval")
-
-    if vendor_status != "approved":
-        missing_requirements.append("vendor_onboarding")
-
-    if item_type in ["software", "cloud_service"] and not security_review:
-        missing_requirements.append("security_review")
+    if vendor in ["unapproved", "new", "unknown"]:
+        route_to.append("procurement")
+        missing.append("vendor onboarding")
+        if policy == "compliant":
+            policy = "partial"
 
     if amount > budget:
-        missing_requirements.append("budget_exception")
+        missing.append("budget exception approval")
+        if policy == "compliant":
+            policy = "partial"
 
-    if len(missing_requirements) == 0:
-        return ProcurementAction(
-            policy_compliance="compliant",
-            approval_decision="approve",
-            risk_level="low",
-            route_to="procurement_auto",
-            missing_requirements=[],
-        )
+    if amount > 10000:
+        risk = "high"
+    elif amount > 5000:
+        risk = "medium"
 
-    if len(missing_requirements) == 1:
-        missing_item = missing_requirements[0]
+    if len(missing) == 0:
+        decision = "approved"
+    elif len(missing) <= 2:
+        decision = "needs_review"
+    else:
+        decision = "denied"
 
-        if missing_item == "manager_approval":
-            return ProcurementAction(
-                policy_compliance="partial",
-                approval_decision="needs_review",
-                risk_level="low",
-                route_to="manager_queue",
-                missing_requirements=missing_requirements,
-            )
-
-        if missing_item == "finance_approval":
-            return ProcurementAction(
-                policy_compliance="partial",
-                approval_decision="needs_review",
-                risk_level="medium",
-                route_to="finance_queue",
-                missing_requirements=missing_requirements,
-            )
-
-        if missing_item == "vendor_onboarding":
-            return ProcurementAction(
-                policy_compliance="non_compliant",
-                approval_decision="needs_review",
-                risk_level="medium",
-                route_to="procurement_queue",
-                missing_requirements=missing_requirements,
-            )
-
-        if missing_item == "security_review":
-            return ProcurementAction(
-                policy_compliance="non_compliant",
-                approval_decision="needs_review",
-                risk_level="medium",
-                route_to="security_queue",
-                missing_requirements=missing_requirements,
-            )
-
-        if missing_item == "budget_exception":
-            return ProcurementAction(
-                policy_compliance="non_compliant",
-                approval_decision="needs_review",
-                risk_level="medium",
-                route_to="finance_queue",
-                missing_requirements=missing_requirements,
-            )
-
-    if "security_review" in missing_requirements and "finance_approval" in missing_requirements:
-        return ProcurementAction(
-            policy_compliance="non_compliant",
-            approval_decision="escalate",
-            risk_level="high",
-            route_to="security_finance_queue",
-            missing_requirements=sorted(missing_requirements),
-        )
-
-    return ProcurementAction(
-        policy_compliance="non_compliant",
-        approval_decision="escalate",
-        risk_level="high",
-        route_to="procurement_queue",
-        missing_requirements=sorted(missing_requirements),
-    )
+    return {
+        "policy_compliance": policy,
+        "approval_decision": decision,
+        "risk_level": risk,
+        "route_to": route_to,
+        "missing_requirements": missing,
+    }
 
 
 def main():
-    tasks = load_tasks()
-    scores = []
+    env = ProcurementComplianceEnv(base_url=ENV_URL)
+    task_ids = load_task_ids()
 
-    with ProcurementComplianceEnv(base_url=BASE_URL).sync() as env:
-        for task in tasks:
-            result = env.reset(task_id=task["id"])
-            action = predict_action(result.observation)
-            step_result = env.step(action)
-            score = step_result.reward if step_result.reward is not None else 0.0
-            scores.append((task["id"], task["difficulty"], score))
+    results = []
 
-    print("BASELINE RESULTS")
-    print("-" * 50)
+    for task_id in task_ids:
+        obs = env.reset(task_id=task_id)
+        action = rule_based_decision(obs)
+        result = env.step(action)
 
-    total_score = 0.0
-    for task_id, difficulty, score in scores:
-        print(f"{task_id:12} | {difficulty:6} | score={score:.2f}")
-        total_score += score
+        reward = result.get("reward", 0.0)
+        difficulty = obs.get("difficulty", "unknown")
 
-    average_score = total_score / len(scores) if scores else 0.0
-    print("-" * 50)
-    print(f"Average score: {average_score:.3f}")
+        print(f"{task_id:20s} {difficulty:8s} score={reward:.4f}")
+        results.append({
+            "task_id": task_id,
+            "difficulty": difficulty,
+            "score": reward,
+        })
+
+    avg = sum(r["score"] for r in results) / len(results) if results else 0
+    print(f"\n{'Overall average':20s} {'':8s} score={avg:.4f}")
+
+    for level in ["easy", "medium", "hard"]:
+        level_results = [r for r in results if r["difficulty"] == level]
+        if level_results:
+            level_avg = sum(r["score"] for r in level_results) / len(level_results)
+            print(f"{level:20s} {'':8s} avg={level_avg:.4f}")
 
 
 if __name__ == "__main__":
