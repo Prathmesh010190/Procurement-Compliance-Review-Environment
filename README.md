@@ -37,6 +37,7 @@ This environment supports the standard OpenEnv API:
 
 ---
 
+
 ## Observation Space
 
 The agent receives a structured procurement request with fields such as:
@@ -86,13 +87,25 @@ A rule-based baseline policy is included for deterministic evaluation.
 Example output format:
 
 ```bash
-BASELINE RESULTS
---------------------------------------------------
-easy_001     | easy   | score=1.00
-easy_002     | easy   | score=1.00
-medium_001   | medium | score=1.00
-medium_002   | medium | score=1.00
-hard_001     | hard   | score=0.95
-hard_002     | hard   | score=1.00
---------------------------------------------------
-Average score: 0.992
+## Baseline Results
+
+Rule-based baseline using hand-coded procurement policy logic.
+
+| Task | Difficulty | Score |
+|------|-----------|-------|
+| easy_001 | easy | 0.5500 |
+| easy_002 | easy | 0.4000 |
+| medium_001 | medium | 0.4000 |
+| medium_002 | medium | 0.2500 |
+| hard_001 | hard | 0.4000 |
+| hard_002 | hard | 0.4000 |
+
+| Level | Average |
+|-------|---------|
+| Easy | 0.4750 |
+| Medium | 0.3250 |
+| Hard | 0.4000 |
+| **Overall** | **0.4000** |
+
+The baseline is deterministic and uses no LLM.
+An LLM-based agent using inference.py is expected to score higher.
