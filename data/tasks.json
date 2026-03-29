@@ -1,0 +1,166 @@
+[
+  {
+    "id": "easy_001",
+    "difficulty": "easy",
+    "request": {
+      "request_id": "REQ-001",
+      "department": "Engineering",
+      "requestor_role": "Team Lead",
+      "item_type": "software",
+      "item_description": "Figma enterprise annual subscription",
+      "amount_usd": 3200,
+      "budget_remaining_usd": 5000,
+      "vendor_status": "approved",
+      "manager_approval": true,
+      "finance_approval": false,
+      "security_review": true,
+      "urgency": "normal",
+      "policy_notes": "Software over 5000 USD requires finance approval. All software requires security review."
+    },
+    "expected_output": {
+      "policy_compliance": "compliant",
+      "approval_decision": "approve",
+      "risk_level": "low",
+      "route_to": "procurement_auto",
+      "missing_requirements": []
+    }
+  },
+  {
+    "id": "easy_002",
+    "difficulty": "easy",
+    "request": {
+      "request_id": "REQ-002",
+      "department": "HR",
+      "requestor_role": "Coordinator",
+      "item_type": "office_supplies",
+      "item_description": "Office chairs for new interns",
+      "amount_usd": 900,
+      "budget_remaining_usd": 3000,
+      "vendor_status": "approved",
+      "manager_approval": false,
+      "finance_approval": false,
+      "security_review": false,
+      "urgency": "normal",
+      "policy_notes": "All purchases require manager approval. Finance approval is required only above 5000 USD."
+    },
+    "expected_output": {
+      "policy_compliance": "partial",
+      "approval_decision": "needs_review",
+      "risk_level": "low",
+      "route_to": "manager_queue",
+      "missing_requirements": ["manager_approval"]
+    }
+  },
+  {
+    "id": "medium_001",
+    "difficulty": "medium",
+    "request": {
+      "request_id": "REQ-003",
+      "department": "Marketing",
+      "requestor_role": "Manager",
+      "item_type": "software",
+      "item_description": "Adobe Creative Cloud team plan",
+      "amount_usd": 6800,
+      "budget_remaining_usd": 10000,
+      "vendor_status": "approved",
+      "manager_approval": true,
+      "finance_approval": false,
+      "security_review": true,
+      "urgency": "normal",
+      "policy_notes": "Software over 5000 USD requires finance approval. All software requires security review."
+    },
+    "expected_output": {
+      "policy_compliance": "partial",
+      "approval_decision": "needs_review",
+      "risk_level": "medium",
+      "route_to": "finance_queue",
+      "missing_requirements": ["finance_approval"]
+    }
+  },
+  {
+    "id": "medium_002",
+    "difficulty": "medium",
+    "request": {
+      "request_id": "REQ-004",
+      "department": "Operations",
+      "requestor_role": "Supervisor",
+      "item_type": "hardware",
+      "item_description": "Barcode scanners for warehouse team",
+      "amount_usd": 4200,
+      "budget_remaining_usd": 6000,
+      "vendor_status": "unapproved",
+      "manager_approval": true,
+      "finance_approval": false,
+      "security_review": false,
+      "urgency": "normal",
+      "policy_notes": "Unapproved vendors must go through procurement onboarding before purchase."
+    },
+    "expected_output": {
+      "policy_compliance": "non_compliant",
+      "approval_decision": "needs_review",
+      "risk_level": "medium",
+      "route_to": "procurement_queue",
+      "missing_requirements": ["vendor_onboarding"]
+    }
+  },
+  {
+    "id": "hard_001",
+    "difficulty": "hard",
+    "request": {
+      "request_id": "REQ-005",
+      "department": "Operations",
+      "requestor_role": "Coordinator",
+      "item_type": "consulting_service",
+      "item_description": "External consultant for emergency warehouse audit",
+      "amount_usd": 12500,
+      "budget_remaining_usd": 8000,
+      "vendor_status": "unapproved",
+      "manager_approval": false,
+      "finance_approval": false,
+      "security_review": false,
+      "urgency": "urgent",
+      "policy_notes": "Consulting services above 10000 USD require finance approval. Unapproved vendors require onboarding. Requests over remaining budget require exception review. All purchases require manager approval."
+    },
+    "expected_output": {
+      "policy_compliance": "non_compliant",
+      "approval_decision": "escalate",
+      "risk_level": "high",
+      "route_to": "procurement_queue",
+      "missing_requirements": [
+        "manager_approval",
+        "finance_approval",
+        "vendor_onboarding",
+        "budget_exception"
+      ]
+    }
+  },
+  {
+    "id": "hard_002",
+    "difficulty": "hard",
+    "request": {
+      "request_id": "REQ-006",
+      "department": "IT",
+      "requestor_role": "Director",
+      "item_type": "cloud_service",
+      "item_description": "New customer analytics SaaS platform",
+      "amount_usd": 15000,
+      "budget_remaining_usd": 20000,
+      "vendor_status": "approved",
+      "manager_approval": true,
+      "finance_approval": false,
+      "security_review": false,
+      "urgency": "high",
+      "policy_notes": "Cloud services require security review. Purchases above 5000 USD require finance approval."
+    },
+    "expected_output": {
+      "policy_compliance": "non_compliant",
+      "approval_decision": "escalate",
+      "risk_level": "high",
+      "route_to": "security_finance_queue",
+      "missing_requirements": [
+        "finance_approval",
+        "security_review"
+      ]
+    }
+  }
+]
