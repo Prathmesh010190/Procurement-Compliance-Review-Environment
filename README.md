@@ -1,3 +1,12 @@
+---
+title: Procurement Compliance Review Environment
+emoji: 📋
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # Procurement-Compliance-Review-Environment# Procurement Compliance Review OpenEnv
 
 A real-world OpenEnv environment for evaluating AI agents on procurement compliance review and approval routing.
