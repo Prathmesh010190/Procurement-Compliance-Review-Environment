@@ -7,7 +7,7 @@ sdk: docker
 pinned: false
 ---
 
-# Procurement-Compliance-Review-Environment# Procurement Compliance Review OpenEnv
+# Procurement Compliance Review OpenEnv
 
 A real-world OpenEnv environment for evaluating AI agents on procurement compliance review and approval routing.
 
@@ -17,11 +17,11 @@ Organizations process internal purchase requests for software, hardware, consult
 
 This environment simulates that workflow. An agent receives a procurement request and must determine:
 
-- policy compliance status
-- approval decision
-- risk level
-- routing destination
-- missing approval or policy requirements
+- Policy compliance status
+- Approval decision
+- Risk level
+- Routing destination
+- Missing approval or policy requirements
 
 This is a realistic operational task used in companies, universities, nonprofits, and enterprise procurement teams.
 
@@ -36,7 +36,6 @@ This environment supports the standard OpenEnv API:
 - `state()`
 
 ---
-
 
 ## Observation Space
 
@@ -79,33 +78,3 @@ The agent submits a structured decision with:
   "route_to": "finance_queue",
   "missing_requirements": ["finance_approval"]
 }
-
-## Example Baseline Results
-
-A rule-based baseline policy is included for deterministic evaluation.
-
-Example output format:
-
-```bash
-## Baseline Results
-
-Rule-based baseline using hand-coded procurement policy logic.
-
-| Task | Difficulty | Score |
-|------|-----------|-------|
-| easy_001 | easy | 0.5500 |
-| easy_002 | easy | 0.4000 |
-| medium_001 | medium | 0.4000 |
-| medium_002 | medium | 0.2500 |
-| hard_001 | hard | 0.4000 |
-| hard_002 | hard | 0.4000 |
-
-| Level | Average |
-|-------|---------|
-| Easy | 0.4750 |
-| Medium | 0.3250 |
-| Hard | 0.4000 |
-| **Overall** | **0.4000** |
-
-The baseline is deterministic and uses no LLM.
-An LLM-based agent using inference.py is expected to score higher.

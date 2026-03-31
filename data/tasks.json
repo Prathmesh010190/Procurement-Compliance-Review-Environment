@@ -179,7 +179,7 @@
       "finance_approval": false,
       "security_review": false,
       "urgency": "low",
-      "policy_notes": "Standard office supply purchase under 500 requires only manager approval."
+      "policy_notes": "Standard office supply purchase under $500 requires only manager approval."
     },
     "expected_output": {
       "policy_compliance": "compliant",
@@ -205,7 +205,7 @@
       "finance_approval": false,
       "security_review": false,
       "urgency": "medium",
-      "policy_notes": "Training purchases under 5000 need only manager approval."
+      "policy_notes": "Training purchases under $5000 need only manager approval."
     },
     "expected_output": {
       "policy_compliance": "compliant",
@@ -257,7 +257,7 @@
       "finance_approval": false,
       "security_review": false,
       "urgency": "high",
-      "policy_notes": "Purchases over 10000 require finance approval. All purchases require manager approval."
+      "policy_notes": "Purchases over $10000 require finance approval. All purchases require manager approval."
     },
     "expected_output": {
       "policy_compliance": "non_compliant",
@@ -283,7 +283,7 @@
       "finance_approval": false,
       "security_review": false,
       "urgency": "urgent",
-      "policy_notes": "Cloud services require security review. New vendors require onboarding. Purchases over 10000 require finance approval. All purchases require manager approval. Requests over remaining budget require budget exception review."
+      "policy_notes": "Cloud services require security review. New vendors require onboarding. Purchases over $10000 require finance approval. All purchases require manager approval. Requests over remaining budget require budget exception review."
     },
     "expected_output": {
       "policy_compliance": "non_compliant",
@@ -309,7 +309,7 @@
       "finance_approval": false,
       "security_review": false,
       "urgency": "medium",
-      "policy_notes": "Software requires security review. Unapproved vendors require procurement review. Purchases over 10000 require finance approval. Requests exceeding budget need budget exception approval."
+      "policy_notes": "Software requires security review. Unapproved vendors require procurement review. Purchases over $10000 require finance approval. Requests exceeding budget need budget exception approval."
     },
     "expected_output": {
       "policy_compliance": "non_compliant",
