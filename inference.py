@@ -13,35 +13,32 @@ MANDATORY
 import os
 import json
 import requests
-from openai import OpenAI 
+from openai import OpenAI
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
+MODEL_NAME = os.getenv("MODEL_NAME", "mistralai/Mistral-Small-24B-Instruct-2501")
 
 ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
 
-SYSTEM_PROMPT = """
-You are a procurement compliance reviewer for a company.
-You will receive a procurement request with details like department, item type,
-amount, vendor status, budget, and approval statuses.
-
-You must return a JSON object with exactly these fields:
-- policy_compliance: string ("compliant", "non_compliant", or "partial")
-- approval_decision: string ("approved", "denied", or "needs_review")
-- risk_level: string ("low", "medium", or "high")
-- route_to: list of strings (e.g. ["manager", "finance", "security"])
-- missing_requirements: list of strings (e.g. ["manager approval", "security review"])
-
-Rules:
-- All purchases need manager approval
-- Purchases over \$5000 need finance approval
-- Software/cloud services need security review
-- Unapproved vendors need vendor onboarding/procurement review
-- Over-budget requests need budget exception review
-
-Return ONLY valid JSON. No explanations.
-""".strip()
+SYSTEM_PROMPT = (
+    "You are a procurement compliance reviewer for a company. "
+    "You will receive a procurement request with details like department, item type, "
+    "amount, vendor status, budget, and approval statuses. "
+    "You must return a JSON object with exactly these fields: "
+    "policy_compliance (string: compliant, non_compliant, or partial), "
+    "approval_decision (string: approved, denied, or needs_review), "
+    "risk_level (string: low, medium, or high), "
+    "route_to (list of strings, e.g. [manager, finance, security]), "
+    "missing_requirements (list of strings, e.g. [manager approval, security review]). "
+    "Rules: "
+    "All purchases need manager approval. "
+    "Purchases over 5000 USD need finance approval. "
+    "Software and cloud services need security review. "
+    "Unapproved vendors need vendor onboarding or procurement review. "
+    "Over-budget requests need budget exception review. "
+    "Return ONLY valid JSON. No explanations."
+)
 
 
 def reset_env(task_id=None):
@@ -60,25 +57,23 @@ def step_env(action):
 
 
 def build_user_prompt(observation):
-    return f"""
-Review this procurement request:
-
-- Request ID: {observation['request_id']}
-- Department: {observation['department']}
-- Requestor Role: {observation['requestor_role']}
-- Item Type: {observation['item_type']}
-- Item Description: {observation['item_description']}
-- Amount (USD): {observation['amount_usd']}
-- Budget Remaining (USD): {observation['budget_remaining_usd']}
-- Vendor Status: {observation['vendor_status']}
-- Manager Approval: {observation['manager_approval']}
-- Finance Approval: {observation['finance_approval']}
-- Security Review: {observation['security_review']}
-- Urgency: {observation['urgency']}
-- Policy Notes: {observation['policy_notes']}
-
-Return your compliance decision as a JSON object.
-""".strip()
+    return (
+        f"Review this procurement request:\n"
+        f"- Request ID: {observation['request_id']}\n"
+        f"- Department: {observation['department']}\n"
+        f"- Requestor Role: {observation['requestor_role']}\n"
+        f"- Item Type: {observation['item_type']}\n"
+        f"- Item Description: {observation['item_description']}\n"
+        f"- Amount (USD): {observation['amount_usd']}\n"
+        f"- Budget Remaining (USD): {observation['budget_remaining_usd']}\n"
+        f"- Vendor Status: {observation['vendor_status']}\n"
+        f"- Manager Approval: {observation['manager_approval']}\n"
+        f"- Finance Approval: {observation['finance_approval']}\n"
+        f"- Security Review: {observation['security_review']}\n"
+        f"- Urgency: {observation['urgency']}\n"
+        f"- Policy Notes: {observation['policy_notes']}\n"
+        f"\nReturn your compliance decision as a JSON object."
+    )
 
 
 def parse_llm_response(response_text):
@@ -103,8 +98,12 @@ def main():
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
     observation = reset_env()
-    print(f"Task: {observation.get('request_id', 'unknown')}")
-    print(f"Difficulty: {observation.get('difficulty', 'unknown')}")
+
+    print("[START]")
+    print(json.dumps({
+        "task_id": observation.get("request_id", "unknown"),
+        "difficulty": observation.get("difficulty", "unknown"),
+    }))
 
     user_prompt = build_user_prompt(observation)
 
@@ -119,19 +118,27 @@ def main():
             max_tokens=500,
         )
         response_text = completion.choices[0].message.content or ""
-        print(f"LLM Response: {response_text}")
     except Exception as e:
         print(f"LLM call failed: {e}")
         response_text = ""
 
     action = parse_llm_response(response_text)
-    print(f"Parsed Action: {json.dumps(action, indent=2)}")
+
+    print("[STEP]")
+    print(json.dumps({
+        "action": action,
+    }))
 
     result = step_env(action)
     reward = result.get("reward", 0.0)
-    print(f"Reward: {reward}")
-    print(f"Done: {result.get('done', False)}")
-    print(f"Message: {result.get('message', '')}")
+    done = result.get("done", False)
+
+    print("[END]")
+    print(json.dumps({
+        "reward": reward,
+        "done": done,
+        "message": result.get("message", ""),
+    }))
 
 
 if __name__ == "__main__":
