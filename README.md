@@ -140,29 +140,28 @@ Requests with several interacting constraints including over-budget purchases fr
 Rule-based baseline using hand-coded procurement policy logic. No LLM required.
 
 | Task | Difficulty | Score |
-|------|------------|-------|
-| easy_001 | easy | 0.5500 |
-| easy_002 | easy | 0.4000 |
+|------|-----------|-------|
+| easy_001 | easy | 1.0000 |
+| easy_002 | easy | 0.6000 |
 | easy_003 | easy | 1.0000 |
 | easy_004 | easy | 1.0000 |
-| medium_001 | medium | 0.4000 |
-| medium_002 | medium | 0.2500 |
-| medium_003 | medium | 1.0000 |
-| medium_004 | medium | 1.0000 |
-| hard_001 | hard | 0.4000 |
+| medium_001 | medium | 0.6000 |
+| medium_002 | medium | 0.4500 |
+| medium_003 | medium | 0.8500 |
+| medium_004 | medium | 0.8500 |
+| hard_001 | hard | 0.6000 |
 | hard_002 | hard | 0.4000 |
-| hard_003 | hard | 1.0000 |
-| hard_004 | hard | 1.0000 |
+| hard_003 | hard | 0.6000 |
+| hard_004 | hard | 0.6000 |
 
 | Level | Average Score |
-|-------|---------------|
-| Easy | 0.7375 |
-| Medium | 0.6625 |
-| Hard | 0.7000 |
-| **Overall** | **0.7000** |
+|-------|--------------|
+| Easy | 0.9000 |
+| Medium | 0.6875 |
+| Hard | 0.5500 |
+| **Overall** | **0.7125** |
 
-The baseline is deterministic and reproducible. An LLM-based agent using `inference.py` is expected to score higher by understanding nuanced policy interactions.
-
+The baseline is deterministic and reproducible. An LLM-based agent using inference.py is expected to score higher by understanding nuanced policy interactions.
 ---
 
 ## Setup Instructions
