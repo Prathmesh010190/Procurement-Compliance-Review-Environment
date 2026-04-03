@@ -30,12 +30,12 @@ def health():
 
 
 @app.post("/reset")
-def reset(request: ResetRequest):
+def reset(request: ResetRequest = None):
     try:
         obs = env.reset(
-            seed=request.seed,
-            episode_id=request.episode_id,
-            task_id=request.task_id,
+            seed=request.seed if request else None,
+            episode_id=request.episode_id if request else None,
+            task_id=request.task_id if request else None,
         )
         return obs.model_dump()
     except Exception as e:
