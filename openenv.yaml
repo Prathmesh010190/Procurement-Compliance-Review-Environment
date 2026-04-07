@@ -1,3 +1,26 @@
 name: procurement-compliance-openenv
 version: "0.1.0"
-description: OpenEnv environment for procurement compliance review and approval routing 
+description: OpenEnv environment for procurement compliance review and approval routing
+
+observation_space:
+  type: object
+  description: Procurement request details including department, amount, vendor status, and approval statuses
+
+action_space:
+  type: object
+  description: Compliance decision with policy_compliance, approval_decision, risk_level, route_to, and missing_requirements
+
+reward_range: [0.0, 1.0]
+
+tasks:
+  total: 12
+  difficulties:
+    - easy
+    - medium
+    - hard
+
+endpoints:
+  reset: /reset
+  step: /step
+  state: /state
+  health: /health
