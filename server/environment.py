@@ -141,4 +141,4 @@ class ProcurementComplianceEnvironment:
 
         score = round(score, 4)
         score = max(0.01, min(0.99, score))
-        return score
+        return score   

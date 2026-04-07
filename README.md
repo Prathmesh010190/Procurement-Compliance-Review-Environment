@@ -141,10 +141,10 @@ Rule-based baseline using hand-coded procurement policy logic. No LLM required.
 
 | Task | Difficulty | Score |
 |------|-----------|-------|
-| easy_001 | easy | 1.0000 |
+| easy_001 | easy | 0.9900 |
 | easy_002 | easy | 0.6000 |
-| easy_003 | easy | 1.0000 |
-| easy_004 | easy | 1.0000 |
+| easy_003 | easy | 0.9900 |
+| easy_004 | easy | 0.9900 |
 | medium_001 | medium | 0.6000 |
 | medium_002 | medium | 0.4500 |
 | medium_003 | medium | 0.8500 |
@@ -156,13 +156,12 @@ Rule-based baseline using hand-coded procurement policy logic. No LLM required.
 
 | Level | Average Score |
 |-------|--------------|
-| Easy | 0.9000 |
+| Easy | 0.8925 |
 | Medium | 0.6875 |
 | Hard | 0.5500 |
-| **Overall** | **0.7125** |
+| **Overall** | **0.7100** |
 
 The baseline is deterministic and reproducible. An LLM-based agent using inference.py is expected to score higher by understanding nuanced policy interactions.
----
 
 ## Setup Instructions
 
