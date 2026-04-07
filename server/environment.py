@@ -139,4 +139,6 @@ class ProcurementComplianceEnvironment:
             overlap = len(expected_missing.intersection(submitted_missing))
             score += 0.15 * (overlap / len(expected_missing))
 
-        return round(score, 4)
+        score = round(score, 4)
+        score = max(0.01, min(0.99, score))
+        return score
