@@ -15,11 +15,11 @@ import json
 import requests
 from openai import OpenAI
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://router.huggingface.co/v1")
+API_KEY = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN")
+MODEL_NAME = os.environ.get("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
 
-ENV_URL = os.getenv("ENV_URL", "http://localhost:7860")
+ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
 
 SYSTEM_PROMPT = (
     "You are a procurement compliance reviewer for a company. "
@@ -27,7 +27,7 @@ SYSTEM_PROMPT = (
     "amount, vendor status, budget, and approval statuses. "
     "You must return a JSON object with exactly these fields: "
     "policy_compliance (string: compliant, non_compliant, or partial), "
-    "approval_decision (string: approved, denied, or needs_review), "
+    "approval_decision (string: approved, denied, needs_review, or escalate), "
     "risk_level (string: low, medium, or high), "
     "route_to (list of strings, e.g. [manager, finance, security]), "
     "missing_requirements (list of strings, e.g. [manager approval, security review]). "
@@ -95,7 +95,10 @@ def parse_llm_response(response_text):
 
 
 def main():
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    client = OpenAI(
+        base_url=API_BASE_URL,
+        api_key=API_KEY,
+    )
 
     observation = reset_env()
 
@@ -107,20 +110,16 @@ def main():
 
     user_prompt = build_user_prompt(observation)
 
-    try:
-        completion = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.2,
-            max_tokens=500,
-        )
-        response_text = completion.choices[0].message.content or ""
-    except Exception as e:
-        print(f"LLM call failed: {e}")
-        response_text = ""
+    completion = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.2,
+        max_tokens=500,
+    )
+    response_text = completion.choices[0].message.content or ""
 
     action = parse_llm_response(response_text)
 
