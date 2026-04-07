@@ -15,8 +15,8 @@ import json
 import requests
 from openai import OpenAI
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY = os.environ.get("API_KEY") or os.environ.get("HF_TOKEN")
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"] 
 MODEL_NAME = os.environ.get("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
 
 ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
