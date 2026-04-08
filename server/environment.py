@@ -10,6 +10,13 @@ from models import ProcurementAction, ProcurementObservation, ProcurementState
 class ProcurementComplianceEnvironment:
     SUPPORTS_CONCURRENT_SESSIONS = True
 
+    # Difficulty multipliers — makes scores DIFFERENT per task
+    DIFFICULTY_WEIGHTS = {
+        "easy": 0.90,
+        "medium": 0.95,
+        "hard": 1.00,
+    }
+
     def __init__(self):
         self.tasks = self._load_tasks()
         self.current_task: Optional[Dict[str, Any]] = None
@@ -22,7 +29,7 @@ class ProcurementComplianceEnvironment:
             return json.load(f)
 
     def get_task_ids(self) -> List[str]:
-        """Return all available task IDs — used by validators to discover tasks."""
+        """Return all available task IDs."""
         return [task["id"] for task in self.tasks]
 
     def reset(self, seed=None, episode_id=None, task_id=None, **kwargs) -> ProcurementObservation:
@@ -88,11 +95,10 @@ class ProcurementComplianceEnvironment:
 
         expected = self.current_task["expected_output"]
 
-        # Wrap grading in try/except so it NEVER crashes
         try:
             reward = self._grade_action(action, expected)
         except Exception:
-            reward = 0.01  # Safe fallback — strictly between 0 and 1
+            reward = 0.01
 
         self._state.score_so_far = reward
         self._state.completed = True
@@ -125,67 +131,106 @@ class ProcurementComplianceEnvironment:
         return self._state
 
     # ------------------------------------------------------------------
-    # GRADER — deterministic, weighted partial credit
+    # GRADER — deterministic, weighted partial credit, difficulty-aware
     # ------------------------------------------------------------------
     def _grade_action(self, action: ProcurementAction, expected: Dict[str, Any]) -> float:
-        score = 0.0
+        raw_score = 0.0
+        max_possible = 0.0
 
         # --- 1. policy_compliance (weight 0.25) ---
+        weight = 0.25
+        max_possible += weight
         try:
             act_val = str(action.policy_compliance or "").strip().lower()
             exp_val = str(expected.get("policy_compliance", "")).strip().lower()
             if act_val and exp_val and act_val == exp_val:
-                score += 0.25
+                raw_score += weight
         except Exception:
             pass
 
         # --- 2. approval_decision (weight 0.25) ---
+        weight = 0.25
+        max_possible += weight
         try:
             act_val = str(action.approval_decision or "").strip().lower()
             exp_val = str(expected.get("approval_decision", "")).strip().lower()
             if act_val and exp_val and act_val == exp_val:
-                score += 0.25
+                raw_score += weight
         except Exception:
             pass
 
         # --- 3. risk_level (weight 0.15) ---
+        weight = 0.15
+        max_possible += weight
         try:
             act_val = str(action.risk_level or "").strip().lower()
             exp_val = str(expected.get("risk_level", "")).strip().lower()
             if act_val and exp_val and act_val == exp_val:
-                score += 0.15
+                raw_score += weight
         except Exception:
             pass
 
         # --- 4. route_to (weight 0.20) — set-based partial credit ---
+        weight = 0.20
+        max_possible += weight
         try:
             exp_route = set(expected.get("route_to") or [])
             act_route = set(action.route_to or [])
             if not exp_route and not act_route:
-                score += 0.20
+                raw_score += weight
             elif exp_route:
                 overlap = len(exp_route.intersection(act_route))
                 denominator = max(len(exp_route), len(act_route))
                 if denominator > 0:
-                    score += 0.20 * (overlap / denominator)
+                    raw_score += weight * (overlap / denominator)
+            # If expected is empty but agent submitted routes: 0 points (false positives)
         except Exception:
             pass
 
-        # --- 5. missing_requirements (weight 0.15) — set overlap ---
+        # --- 5. missing_requirements (weight 0.15) — set-based partial credit ---
+        weight = 0.15
+        max_possible += weight
         try:
             exp_missing = set(expected.get("missing_requirements") or [])
             act_missing = set(action.missing_requirements or [])
             if not exp_missing and not act_missing:
-                score += 0.15
+                raw_score += weight
             elif exp_missing:
                 overlap = len(exp_missing.intersection(act_missing))
-                score += 0.15 * (overlap / len(exp_missing))
+                # Penalize for false positives too
+                if len(act_missing) > 0:
+                    precision = overlap / len(act_missing)
+                else:
+                    precision = 0.0
+                recall = overlap / len(exp_missing)
+                # F1-like score
+                if precision + recall > 0:
+                    f1 = 2 * (precision * recall) / (precision + recall)
+                else:
+                    f1 = 0.0
+                raw_score += weight * f1
+            # If expected is empty but agent submitted missing reqs: 0 points
         except Exception:
             pass
 
-        # ----------------------------------------------------------
-        # CLAMP: strictly between 0 and 1  (never 0.0, never 1.0)
-        # ----------------------------------------------------------
-        score = round(score, 4)
-        score = max(0.01, min(0.99, score))
-        return score
+        # --- Apply difficulty multiplier for score variation ---
+        difficulty = self.current_task.get("difficulty", "medium")
+        diff_weight = self.DIFFICULTY_WEIGHTS.get(difficulty, 0.95)
+
+        # Number of expected fields that are non-trivial (lists with items)
+        complexity_bonus = 0.0
+        exp_route_len = len(expected.get("route_to") or [])
+        exp_missing_len = len(expected.get("missing_requirements") or [])
+        total_expected_items = exp_route_len + exp_missing_len
+
+        if total_expected_items > 0:
+            # More complex tasks get a tiny bonus for getting them right
+            complexity_bonus = min(0.03, total_expected_items * 0.005)
+
+        # Final score with variation
+        final_score = (raw_score * diff_weight) + (complexity_bonus if raw_score > 0.5 else 0.0)
+
+        # Round and clamp strictly between 0 and 1
+        final_score = round(final_score, 4)
+        final_score = max(0.01, min(0.98, final_score))
+        return final_score
