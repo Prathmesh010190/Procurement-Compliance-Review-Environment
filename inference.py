@@ -3,9 +3,10 @@ Inference Script for Procurement Compliance Review Environment
 ===================================
 MANDATORY
 - Before submitting, ensure the following variables are defined:
-    API_BASE_URL   The API endpoint for the LLM.
+    API_BASE_URL   The API endpoint for the LLM (injected by hackathon platform).
+    API_KEY        The API key for the LLM proxy (injected by hackathon platform).
     MODEL_NAME     The model identifier to use for inference.
-    HF_TOKEN       Your Hugging Face / API key.
+    HF_TOKEN       Your Hugging Face token (optional fallback for API_KEY).
 
 - Uses OpenAI Client for all LLM calls
 """
@@ -17,13 +18,14 @@ from typing import List, Optional
 
 from openai import OpenAI
 
-# ---------- ENV VARS (hackathon-mandated names) ----------
+# ---------- MANDATORY: use platform-injected env vars ----------
 API_BASE_URL = os.environ["API_BASE_URL"]
 API_KEY = os.environ["API_KEY"]
 MODEL_NAME = os.environ.get("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
-ENV_URL = os.getenv("ENV_URL") or "http://localhost:7860"
+ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
 BENCHMARK = "procurement-compliance"
-MAX_STEPS = 1  # Our env is single-step: reset -> step -> done
+MAX_STEPS = 1
+
 
 SYSTEM_PROMPT = (
     "You are a procurement compliance reviewer for a company. "
@@ -34,7 +36,8 @@ SYSTEM_PROMPT = (
     "approval_decision (string: approved, denied, needs_review, or escalate), "
     "risk_level (string: low, medium, or high), "
     "route_to (list of strings, e.g. [\"manager\", \"finance\", \"security\", \"procurement\"]), "
-    "missing_requirements (list of strings, e.g. [\"manager_approval\", \"finance_approval\", \"security_review\", \"vendor_onboarding\", \"budget_exception\"]). "
+    "missing_requirements (list of strings, e.g. [\"manager_approval\", \"finance_approval\", "
+    "\"security_review\", \"vendor_onboarding\", \"budget_exception\"]). "
     "Rules: "
     "1. All purchases need manager approval. "
     "2. Purchases over 5000 USD need finance approval. "
@@ -178,10 +181,14 @@ def get_llm_action(client: OpenAI, obs: dict) -> dict:
 
 
 # ──────────────────────────────────────────────
-# MAIN — runs ALL tasks with mandatory logging
+# MAIN
 # ──────────────────────────────────────────────
 def main():
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    # MANDATORY: use injected API_BASE_URL and API_KEY
+    client = OpenAI(
+        base_url=API_BASE_URL,
+        api_key=API_KEY,
+    )
 
     task_ids = get_task_ids()
 
@@ -191,25 +198,19 @@ def main():
         score = 0.0
         success = False
 
-        # === [START] ===
         log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
         try:
-            # Reset environment
             obs = reset_env(task_id)
-
-            # Get LLM action
             action = get_llm_action(client, obs)
             action_str = f"submit_decision({action['approval_decision']})"
 
-            # Step environment
             result = step_env(action)
             reward = result.get("reward", 0.01)
             done = result.get("done", True)
             steps_taken = 1
             rewards.append(reward)
 
-            # === [STEP] ===
             log_step(step=1, action=action_str, reward=reward, done=done, error=None)
 
             score = reward
@@ -224,7 +225,6 @@ def main():
             log_step(step=1, action="error", reward=0.0, done=True, error=str(e))
 
         finally:
-            # === [END] ===
             log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
