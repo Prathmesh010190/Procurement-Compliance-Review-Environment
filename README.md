@@ -62,6 +62,8 @@ The environment implements the standard OpenEnv interface:
 }
 ```
 
+---
+
 ## Observation Space
 
 The agent receives a structured procurement request containing:
@@ -85,9 +87,11 @@ The agent receives a structured procurement request containing:
 | `done` | bool | Whether the episode is complete |
 | `reward` | float/null | Score (null on reset, 0.01–0.98 after step) |
 
-## Setup Instructions
+---
 
-### Local Python Setup
+## 🚀 Setup Instructions
+
+### 🔹 Local Python Setup
 
 ```bash
 git clone https://github.com/Prathmesh010190/Procurement-Compliance-Review-Environment.git
@@ -101,11 +105,11 @@ pip install -r requirements.txt
 uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
 
-Then open: http://localhost:7860/docs
+👉 Open API Docs: [http://localhost:7860/docs](http://localhost:7860/docs)
 
 ---
 
-### Docker Setup
+### 🐳 Docker Setup
 
 ```bash
 docker build -t procurement-openenv .
@@ -114,7 +118,7 @@ docker run -p 7860:7860 procurement-openenv
 
 ---
 
-### Run Baseline (Perfect Answers)
+### 🧠 Run Baseline (Perfect Answers)
 
 ```bash
 python scripts/baseline_inference.py
@@ -122,7 +126,7 @@ python scripts/baseline_inference.py
 
 ---
 
-## Run LLM Inference
+## 🤖 Run LLM Inference
 
 Ensure your API key is set correctly before running inference.
 
@@ -137,7 +141,7 @@ python inference.py
 
 ---
 
-## Validate Environment
+## ✅ Validate Environment
 
 ```bash
 pip install openenv-core
@@ -146,8 +150,108 @@ openenv validate
 
 ---
 
-## Pre-Submission Validation
+## 🧪 Pre-Submission Validation
 
 ```bash
 bash validate-submission.sh https://prathmesh1243-procurement-compliance-review-environment.hf.space .
 ```
+
+---
+
+## 🌐 Deployment
+
+| Resource | Link |
+|----------|------|
+| 🚀 Live App | [Open App](https://huggingface.co/spaces/Prathmesh1243) |
+| 📄 API Docs | [Swagger UI](https://prathmesh1243-procurement-compliance-review-environment.hf.space/docs) |
+| ❤️ Health Check | [Check Status](https://prathmesh1243-procurement-compliance-review-environment.hf.space/health) |
+| 🤗 HF Space | https://huggingface.co/spaces/Prathmesh1243 |
+| 💻 GitHub | https://github.com/Prathmesh010190 |
+
+## Repository Structure
+
+```text
+.
+├── Dockerfile                     # Docker image for HF Spaces deployment
+├── README.md                     # This file
+├── openenv.yaml                  # OpenEnv environment configuration
+├── pyproject.toml                # Python project configuration
+├── requirements.txt              # Python dependencies
+├── uv.lock                       # Dependency lock file
+├── inference.py                  # LLM inference script (mandatory, uses OpenAI client)
+├── models.py                     # Typed Pydantic models (Action, Observation, State)
+├── client.py                     # HTTP client for the environment
+├── validate-submission.sh        # Pre-submission validation script
+├── .env.example                  # Example environment variables
+├── .gitignore
+├── data/
+│   └── tasks.json                # 12 procurement review tasks (4 easy, 4 medium, 4 hard)
+├── scripts/
+│   ├── baseline_inference.py     # Rule-based baseline (deterministic, perfect answers)
+│   └── test_client.py            # Client testing script
+├── server/
+│   ├── __init__.py
+│   ├── app.py                   # FastAPI server with reset/step/state/tasks endpoints
+│   └── environment.py           # Core environment logic and grading
+└── tests/
+    └── test_basic.py            # Basic environment tests
+```
+
+## Technical Details
+
+### Typed Models
+
+All models use Pydantic `BaseModel` for type safety and validation:
+
+| Model | Purpose |
+|------|--------|
+| `ProcurementAction` | Agent's compliance decision (5 fields) |
+| `ProcurementObservation` | Procurement request details + reward + done flag |
+| `ProcurementState` | Episode tracking with expected values |
+
+---
+
+### Environment Design
+
+- Single-step episodes reflecting real procurement intake review  
+- Deterministic grading with weighted partial credit  
+- Difficulty-aware scoring with complexity bonuses  
+- Support for `task_id` parameter for reproducible evaluation  
+- Concurrent session support  
+- Case-insensitive string matching  
+- Null-safe field handling with try/except guards  
+- Set-based partial credit for list fields (`route_to`, `missing_requirements`)  
+
+## Inference Script
+
+- Uses OpenAI client for all LLM calls  
+- Reads platform-injected environment variables: `API_BASE_URL`, `API_KEY`  
+- Configurable `MODEL_NAME` with sensible default  
+- Emits structured `[START]`, `[STEP]`, `[END]` stdout logs per hackathon spec  
+- Loops through all 12 tasks  
+- Includes fallback handling if LLM call fails  
+- Runtime well under 20 minute limit  
+
+---
+
+## Why This Benchmark Is Useful
+
+This environment tests whether an AI agent can:
+
+1. **Apply enterprise policy logic** — correctly identify which rules apply to each request  
+2. **Identify missing requirements** — determine what approvals or reviews are still needed  
+3. **Choose appropriate decisions** — approve, deny, escalate, or route for review  
+4. **Route to correct teams** — direct requests to the right internal stakeholders  
+5. **Assess risk accurately** — evaluate the risk level based on violation severity  
+6. **Produce structured outputs** — generate auditable, machine-readable compliance decisions  
+
+These are realistic capabilities needed in internal operations AI systems used by procurement, finance, and compliance teams worldwide.
+
+## Limitations and Future Work
+
+- **Single-step episodes** — could be extended to multi-turn clarification workflows  
+- **Static policies** — could add policy versioning and dynamic rule changes  
+- **12 tasks** — could be expanded to a larger and more diverse benchmark set  
+- **Text-only** — could include document attachment review (invoices, contracts)  
+- **No vendor database** — could add realistic vendor lookup integration  
+- **No temporal context** — could add purchase history and spending pattern analysis  
