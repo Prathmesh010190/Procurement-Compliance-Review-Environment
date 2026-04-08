@@ -2,7 +2,7 @@ import json
 import random
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from models import ProcurementAction, ProcurementObservation, ProcurementState
 
@@ -12,7 +12,7 @@ class ProcurementComplianceEnvironment:
 
     def __init__(self):
         self.tasks = self._load_tasks()
-        self.current_task: Dict[str, Any] | None = None
+        self.current_task: Optional[Dict[str, Any]] = None
         self._state = ProcurementState()
         self._completed = False
 
@@ -20,6 +20,10 @@ class ProcurementComplianceEnvironment:
         data_path = Path(__file__).resolve().parent.parent / "data" / "tasks.json"
         with open(data_path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def get_task_ids(self) -> List[str]:
+        """Return all available task IDs — used by validators to discover tasks."""
+        return [task["id"] for task in self.tasks]
 
     def reset(self, seed=None, episode_id=None, task_id=None, **kwargs) -> ProcurementObservation:
         if seed is not None:
@@ -70,7 +74,7 @@ class ProcurementComplianceEnvironment:
             policy_notes=request["policy_notes"],
             difficulty=self.current_task["difficulty"],
             allowed_actions=["submit_decision"],
-            message="Review this procurement request and submit a compliance decision."
+            message="Review this procurement request and submit a compliance decision.",
         )
 
     def step(self, action: ProcurementAction, timeout_s=None, **kwargs) -> ProcurementObservation:
@@ -83,7 +87,12 @@ class ProcurementComplianceEnvironment:
         self._state.step_count += 1
 
         expected = self.current_task["expected_output"]
-        reward = self._grade_action(action, expected)
+
+        # Wrap grading in try/except so it NEVER crashes
+        try:
+            reward = self._grade_action(action, expected)
+        except Exception:
+            reward = 0.01  # Safe fallback — strictly between 0 and 1
 
         self._state.score_so_far = reward
         self._state.completed = True
@@ -109,36 +118,74 @@ class ProcurementComplianceEnvironment:
             policy_notes=request["policy_notes"],
             difficulty=self.current_task["difficulty"],
             allowed_actions=["submit_decision"],
-            message=f"Decision submitted. Final score: {reward:.2f}"
+            message=f"Decision submitted. Final score: {reward:.4f}",
         )
 
     def state(self) -> ProcurementState:
         return self._state
 
+    # ------------------------------------------------------------------
+    # GRADER — deterministic, weighted partial credit
+    # ------------------------------------------------------------------
     def _grade_action(self, action: ProcurementAction, expected: Dict[str, Any]) -> float:
         score = 0.0
 
-        if action.policy_compliance == expected["policy_compliance"]:
-            score += 0.25
+        # --- 1. policy_compliance (weight 0.25) ---
+        try:
+            act_val = str(action.policy_compliance or "").strip().lower()
+            exp_val = str(expected.get("policy_compliance", "")).strip().lower()
+            if act_val and exp_val and act_val == exp_val:
+                score += 0.25
+        except Exception:
+            pass
 
-        if action.approval_decision == expected["approval_decision"]:
-            score += 0.25
+        # --- 2. approval_decision (weight 0.25) ---
+        try:
+            act_val = str(action.approval_decision or "").strip().lower()
+            exp_val = str(expected.get("approval_decision", "")).strip().lower()
+            if act_val and exp_val and act_val == exp_val:
+                score += 0.25
+        except Exception:
+            pass
 
-        if action.risk_level == expected["risk_level"]:
-            score += 0.15
+        # --- 3. risk_level (weight 0.15) ---
+        try:
+            act_val = str(action.risk_level or "").strip().lower()
+            exp_val = str(expected.get("risk_level", "")).strip().lower()
+            if act_val and exp_val and act_val == exp_val:
+                score += 0.15
+        except Exception:
+            pass
 
-        if action.route_to == expected["route_to"]:
-            score += 0.20
+        # --- 4. route_to (weight 0.20) — set-based partial credit ---
+        try:
+            exp_route = set(expected.get("route_to") or [])
+            act_route = set(action.route_to or [])
+            if not exp_route and not act_route:
+                score += 0.20
+            elif exp_route:
+                overlap = len(exp_route.intersection(act_route))
+                denominator = max(len(exp_route), len(act_route))
+                if denominator > 0:
+                    score += 0.20 * (overlap / denominator)
+        except Exception:
+            pass
 
-        expected_missing = set(expected["missing_requirements"])
-        submitted_missing = set(action.missing_requirements)
+        # --- 5. missing_requirements (weight 0.15) — set overlap ---
+        try:
+            exp_missing = set(expected.get("missing_requirements") or [])
+            act_missing = set(action.missing_requirements or [])
+            if not exp_missing and not act_missing:
+                score += 0.15
+            elif exp_missing:
+                overlap = len(exp_missing.intersection(act_missing))
+                score += 0.15 * (overlap / len(exp_missing))
+        except Exception:
+            pass
 
-        if len(expected_missing) == 0 and len(submitted_missing) == 0:
-            score += 0.15
-        elif len(expected_missing) > 0:
-            overlap = len(expected_missing.intersection(submitted_missing))
-            score += 0.15 * (overlap / len(expected_missing))
-
+        # ----------------------------------------------------------
+        # CLAMP: strictly between 0 and 1  (never 0.0, never 1.0)
+        # ----------------------------------------------------------
         score = round(score, 4)
         score = max(0.01, min(0.99, score))
-        return score   
+        return score

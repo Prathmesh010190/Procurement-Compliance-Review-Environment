@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from typing import Optional, List
 
 from models import ProcurementAction
 from server.environment import ProcurementComplianceEnvironment
@@ -10,9 +11,9 @@ env = ProcurementComplianceEnvironment()
 
 
 class ResetRequest(BaseModel):
-    seed: int | None = None
-    episode_id: str | None = None
-    task_id: str | None = None
+    seed: Optional[int] = None
+    episode_id: Optional[str] = None
+    task_id: Optional[str] = None
 
 
 @app.get("/")
@@ -20,13 +21,22 @@ def root():
     return {
         "name": "Procurement Compliance Review Environment",
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/tasks")
+def list_tasks():
+    """Return all available task IDs — used by validators to discover tasks."""
+    return {
+        "task_ids": env.get_task_ids(),
+        "total": len(env.get_task_ids()),
+    }
 
 
 @app.post("/reset")
@@ -57,6 +67,7 @@ def state():
         return env.state().model_dump()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 def main():
     import uvicorn

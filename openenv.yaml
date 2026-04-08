@@ -10,19 +10,49 @@ action_space:
   type: object
   description: Compliance decision with policy_compliance, approval_decision, risk_level, route_to, and missing_requirements
 
-reward_range: [0.0, 1.0]
+reward_range: [0.01, 0.99]
 
 tasks:
-  total: 12
-  difficulties:
-    - easy
-    - medium
-    - hard
+  - id: easy_001
+    difficulty: easy
+    description: Compliant software purchase under budget with all approvals
+  - id: easy_002
+    difficulty: easy
+    description: Office supplies missing manager approval
+  - id: easy_003
+    difficulty: easy
+    description: Low-cost office supplies with all approvals
+  - id: easy_004
+    difficulty: easy
+    description: Training subscription with manager approval
+  - id: medium_001
+    difficulty: medium
+    description: Software over 5000 USD missing finance approval
+  - id: medium_002
+    difficulty: medium
+    description: Hardware from unapproved vendor
+  - id: medium_003
+    difficulty: medium
+    description: Software missing security review
+  - id: medium_004
+    difficulty: medium
+    description: High-value consulting missing finance approval
+  - id: hard_001
+    difficulty: hard
+    description: Emergency consulting with multiple violations
+  - id: hard_002
+    difficulty: hard
+    description: Cloud service missing security and finance
+  - id: hard_003
+    difficulty: hard
+    description: Expensive cloud service with all violations
+  - id: hard_004
+    difficulty: hard
+    description: Software with vendor, security, finance, and budget issues
 
 endpoints:
   reset: /reset
   step: /step
   state: /state
   health: /health
-
-  
+  tasks: /tasks
