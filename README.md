@@ -48,6 +48,7 @@ The environment implements the standard OpenEnv interface:
   "seed": null,
   "episode_id": null
 }
+```
 
 ## Step Request (Action)
 
@@ -59,6 +60,7 @@ The environment implements the standard OpenEnv interface:
   "route_to": ["finance", "security"],
   "missing_requirements": ["finance_approval", "security_review"]
 }
+```
 
 ## Observation Space
 
@@ -83,123 +85,7 @@ The agent receives a structured procurement request containing:
 | `done` | bool | Whether the episode is complete |
 | `reward` | float/null | Score (null on reset, 0.01–0.98 after step) |
 
-## Action Space
-
-The agent submits a structured compliance decision:
-
-| Field | Type | Valid Values | Description |
-|------|------|--------------|------------|
-| `policy_compliance` | string | compliant, non_compliant, partial | Overall compliance status |
-| `approval_decision` | string | approved, denied, needs_review, escalate | What should happen next |
-| `risk_level` | string | low, medium, high | Risk assessment |
-| `route_to` | list[string] | manager, finance, security, procurement | Teams to route the request to |
-| `missing_requirements` | list[string] | manager_approval, finance_approval, security_review, vendor_onboarding, budget_exception | Missing approvals or requirements |
-
-## Procurement Policy Rules
-
-The environment enforces these enterprise procurement policies:
-
-| Rule | Condition | Trigger |
-|------|----------|---------|
-| Manager approval | All purchases require manager approval | Always |
-| Finance approval | Purchases over $5,000 require finance approval | `amount_usd > 5000` |
-| Security review | Software and cloud services require security review | `item_type in [software, cloud_service]` |
-| Vendor onboarding | Unapproved or new vendors require procurement review | `vendor_status in [unapproved, new]` |
-| Budget exception | Over-budget requests require budget exception approval | `amount_usd > budget_remaining_usd` |
-
-## Reward Design
-
-The reward is a deterministic score in the range (0.01, 0.98) with weighted partial credit across five dimensions:
-
-| Field | Weight | Scoring Method |
-|------|--------|----------------|
-| Policy compliance | 0.25 | Exact string match (case-insensitive) |
-| Approval decision | 0.25 | Exact string match (case-insensitive) |
-| Risk level | 0.15 | Exact string match (case-insensitive) |
-| Route to | 0.20 | Set-based partial credit (overlap / max set size) |
-| Missing requirements | 0.15 | F1-score between predicted and expected sets |
-
-## Score Variation
-
-Scores are adjusted by difficulty level to ensure variation across tasks:
-
-| Difficulty | Multiplier |
-|-----------|------------|
-| Easy | 0.90 |
-| Medium | 0.95 |
-| Hard | 1.00 |
-
-Complex tasks with more routing targets and missing requirements receive a small complexity bonus when the agent scores above 50%, ensuring every task produces a distinct score. All scores are clamped to (0.01, 0.98) — never exactly 0 or 1.
-
-## Tasks
-
-12 tasks across 3 difficulty levels:
-
-### Easy (4 tasks)
-
-| Task ID | Description |
-|--------|-------------|
-| `easy_001` | Compliant software purchase under budget with all approvals |
-| `easy_002` | Office supplies missing manager approval |
-| `easy_003` | Low-cost office supplies with all approvals |
-| `easy_004` | Training subscription with manager approval |
-
-### Medium (4 tasks)
-
-| Task ID | Description |
-|--------|-------------|
-| `medium_001` | Software over $5,000 missing finance approval |
-| `medium_002` | Hardware from unapproved vendor |
-| `medium_003` | Software missing security review |
-| `medium_004` | High-value consulting missing finance approval |
-
-### Hard (4 tasks)
-
-| Task ID | Description |
-|--------|-------------|
-| `hard_001` | Emergency consulting with multiple violations (over-budget, unapproved vendor, no approvals) |
-| `hard_002` | Cloud service missing both security and finance reviews |
-| `hard_003` | Expensive cloud service with all violations (over-budget, new vendor, no approvals) |
-| `hard_004` | Software with vendor, security, finance, and budget issues |
-
-## Baseline Results
-
-Scores from running `scripts/baseline_inference.py` which submits deterministic perfect answers:
-
-| Task ID | Difficulty | Score |
-|--------|------------|-------|
-| easy_001 | easy | 0.9000 |
-| easy_002 | easy | 0.9100 |
-| easy_003 | easy | 0.9000 |
-| easy_004 | easy | 0.9000 |
-| medium_001 | medium | 0.9600 |
-| medium_002 | medium | 0.9600 |
-| medium_003 | medium | 0.9600 |
-| medium_004 | medium | 0.9600 |
-| hard_001 | hard | 0.9800 |
-| hard_002 | hard | 0.9800 |
-| hard_003 | hard | 0.9800 |
-| hard_004 | hard | 0.9800 |
-
-### Summary
-
-| Difficulty | Average Score |
-|-----------|--------------|
-| Easy | 0.9025 |
-| Medium | 0.9600 |
-| Hard | 0.9800 |
-| **Overall** | **0.9475** |
-
-The baseline is deterministic and reproducible. An LLM-based agent using `inference.py` produces varied scores depending on model capability, making this a meaningful benchmark for evaluating procurement reasoning ability.
-
----
-
 ## Setup Instructions
-
-### Prerequisites
-
-- Python 3.10+
-- Docker (for containerized deployment)
 
 ### Local Python Setup
 
@@ -213,15 +99,28 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 uvicorn server.app:app --host 0.0.0.0 --port 7860
+```
 
 Then open: http://localhost:7860/docs
 
-###Docker Setup
+---
+
+### Docker Setup
+
+```bash
 docker build -t procurement-openenv .
 docker run -p 7860:7860 procurement-openenv
+```
 
-###Run Baseline (Perfect Answers)
+---
+
+### Run Baseline (Perfect Answers)
+
+```bash
 python scripts/baseline_inference.py
+```
+
+---
 
 ## Run LLM Inference
 
@@ -234,107 +133,21 @@ export MODEL_NAME="meta-llama/Meta-Llama-3-8B-Instruct"
 export ENV_URL="http://localhost:7860"
 
 python inference.py
+```
 
-###Validate Environment
+---
+
+## Validate Environment
+
+```bash
 pip install openenv-core
 openenv validate
+```
 
-###Pre-Submission Validation
+---
+
+## Pre-Submission Validation
+
+```bash
 bash validate-submission.sh https://prathmesh1243-procurement-compliance-review-environment.hf.space .
-
-## Deployment
-
-This environment is deployed as a Docker-based Hugging Face Space.
-
-| Resource | Link |
-|----------|------|
-| 🚀 Live App | [Open App](https://huggingface.co/spaces/Prathmesh1243) |
-| 📄 API Docs | [Swagger UI](https://prathmesh1243-procurement-compliance-review-environment.hf.space/docs) |
-| ❤️ Health Check | [/health](https://prathmesh1243-procurement-compliance-review-environment.hf.space/health) |
-| 🤗 HF Space | https://huggingface.co/spaces/Prathmesh1243 |
-| 💻 GitHub | https://github.com/Prathmesh010190 |
-
-###Repository Structure
-.
-├── Dockerfile                     # Docker image for HF Spaces deployment
-├── README.md                      # This file
-├── openenv.yaml                   # OpenEnv environment configuration
-├── pyproject.toml                 # Python project configuration
-├── requirements.txt               # Python dependencies
-├── uv.lock                        # Dependency lock file
-├── inference.py                   # LLM inference script (mandatory, uses OpenAI client)
-├── models.py                      # Typed Pydantic models (Action, Observation, State)
-├── client.py                      # HTTP client for the environment
-├── validate-submission.sh         # Pre-submission validation script
-├── .env.example                   # Example environment variables
-├── .gitignore
-├── data/
-│   └── tasks.json                 # 12 procurement review tasks (4 easy, 4 medium, 4 hard)
-├── scripts/
-│   ├── baseline_inference.py      # Rule-based baseline (deterministic, perfect answers)
-│   └── test_client.py             # Client testing script
-├── server/
-│   ├── __init__.py
-│   ├── app.py                     # FastAPI server with reset/step/state/tasks endpoints
-│   └── environment.py             # Core environment logic and grading
-└── tests/
-    └── test_basic.py              # Basic environment tests
-
-## Technical Details
-
-### Typed Models
-
-All models use Pydantic `BaseModel` for type safety and validation:
-
-| Model | Purpose |
-|------|--------|
-| `ProcurementAction` | Agent's compliance decision (5 fields) |
-| `ProcurementObservation` | Procurement request details + reward + done flag |
-| `ProcurementState` | Episode tracking with expected values |
-
----
-
-### Environment Design
-
-- Single-step episodes reflecting real procurement intake review  
-- Deterministic grading with weighted partial credit  
-- Difficulty-aware scoring with complexity bonuses  
-- Support for `task_id` parameter for reproducible evaluation  
-- Concurrent session support  
-- Case-insensitive string matching  
-- Null-safe field handling with try/except guards  
-- Set-based partial credit for list fields (`route_to`, `missing_requirements`)  
-
-## Inference Script
-
-- Uses OpenAI client for all LLM calls  
-- Reads platform-injected environment variables: `API_BASE_URL`, `API_KEY`  
-- Configurable `MODEL_NAME` with sensible default  
-- Emits structured `[START]`, `[STEP]`, `[END]` stdout logs per hackathon spec  
-- Loops through all 12 tasks  
-- Includes fallback handling if LLM call fails  
-- Runtime well under 20 minute limit  
-
----
-
-## Why This Benchmark Is Useful
-
-This environment tests whether an AI agent can:
-
-1. **Apply enterprise policy logic** — correctly identify which rules apply to each request  
-2. **Identify missing requirements** — determine what approvals or reviews are still needed  
-3. **Choose appropriate decisions** — approve, deny, escalate, or route for review  
-4. **Route to correct teams** — direct requests to the right internal stakeholders  
-5. **Assess risk accurately** — evaluate the risk level based on violation severity  
-6. **Produce structured outputs** — generate auditable, machine-readable compliance decisions  
-
-These are realistic capabilities needed in internal operations AI systems used by procurement, finance, and compliance teams worldwide.
-
-## Limitations and Future Work
-
-- **Single-step episodes** — could be extended to multi-turn clarification workflows  
-- **Static policies** — could add policy versioning and dynamic rule changes  
-- **12 tasks** — could be expanded to a larger and more diverse benchmark set  
-- **Text-only** — could include document attachment review (invoices, contracts)  
-- **No vendor database** — could add realistic vendor lookup integration  
-- **No temporal context** — could add purchase history and spending pattern analysis  
+```
