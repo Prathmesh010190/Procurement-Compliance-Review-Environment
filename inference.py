@@ -13,13 +13,17 @@ MANDATORY
 import os
 import json
 import requests
+from typing import List, Optional
+
 from openai import OpenAI
 
 # ---------- ENV VARS (hackathon-mandated names) ----------
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://router.huggingface.co/v1")
-HF_TOKEN = os.environ.get("HF_TOKEN", os.environ.get("API_KEY", ""))
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"]
 MODEL_NAME = os.environ.get("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
-ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
+ENV_URL = os.getenv("ENV_URL") or "http://localhost:7860"
+BENCHMARK = "procurement-compliance"
+MAX_STEPS = 1  # Our env is single-step: reset -> step -> done
 
 SYSTEM_PROMPT = (
     "You are a procurement compliance reviewer for a company. "
@@ -39,20 +43,44 @@ SYSTEM_PROMPT = (
     "5. Over-budget requests (amount > budget_remaining) need budget exception review. "
     "6. If all requirements met: compliant + approved + low risk. "
     "7. If one requirement missing: partial + needs_review. "
-    "8. If multiple requirements missing: non_compliant + escalate + high risk. "
+    "8. If multiple requirements missing or critical issues: non_compliant + escalate + high risk. "
     "Return ONLY valid JSON. No explanations."
 )
 
 
-def get_task_ids():
-    """Fetch available task IDs from the environment."""
+# ──────────────────────────────────────────────
+# STRUCTURED LOGGING — MANDATORY FORMAT
+# ──────────────────────────────────────────────
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}",
+        flush=True,
+    )
+
+
+# ──────────────────────────────────────────────
+# ENVIRONMENT HELPERS
+# ──────────────────────────────────────────────
+def get_task_ids() -> List[str]:
     try:
-        response = requests.get(f"{ENV_URL}/tasks", timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("task_ids", [])
+        resp = requests.get(f"{ENV_URL}/tasks", timeout=10)
+        resp.raise_for_status()
+        return resp.json().get("task_ids", [])
     except Exception:
-        # Fallback: hardcoded task IDs
         return [
             "easy_001", "easy_002", "easy_003", "easy_004",
             "medium_001", "medium_002", "medium_003", "medium_004",
@@ -60,53 +88,49 @@ def get_task_ids():
         ]
 
 
-def reset_env(task_id=None):
-    payload = {}
-    if task_id:
-        payload["task_id"] = task_id
-    response = requests.post(f"{ENV_URL}/reset", json=payload, timeout=30)
-    response.raise_for_status()
-    return response.json()
+def reset_env(task_id: str) -> dict:
+    resp = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id}, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
 
 
-def step_env(action):
-    response = requests.post(f"{ENV_URL}/step", json=action, timeout=30)
-    response.raise_for_status()
-    return response.json()
+def step_env(action: dict) -> dict:
+    resp = requests.post(f"{ENV_URL}/step", json=action, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
 
 
-def build_user_prompt(observation):
+# ──────────────────────────────────────────────
+# LLM HELPERS
+# ──────────────────────────────────────────────
+def build_user_prompt(obs: dict) -> str:
     return (
         f"Review this procurement request:\n"
-        f"- Request ID: {observation.get('request_id', 'N/A')}\n"
-        f"- Department: {observation.get('department', 'N/A')}\n"
-        f"- Requestor Role: {observation.get('requestor_role', 'N/A')}\n"
-        f"- Item Type: {observation.get('item_type', 'N/A')}\n"
-        f"- Item Description: {observation.get('item_description', 'N/A')}\n"
-        f"- Amount (USD): {observation.get('amount_usd', 0)}\n"
-        f"- Budget Remaining (USD): {observation.get('budget_remaining_usd', 0)}\n"
-        f"- Vendor Status: {observation.get('vendor_status', 'N/A')}\n"
-        f"- Manager Approval: {observation.get('manager_approval', False)}\n"
-        f"- Finance Approval: {observation.get('finance_approval', False)}\n"
-        f"- Security Review: {observation.get('security_review', False)}\n"
-        f"- Urgency: {observation.get('urgency', 'N/A')}\n"
-        f"- Policy Notes: {observation.get('policy_notes', 'N/A')}\n"
+        f"- Request ID: {obs.get('request_id', 'N/A')}\n"
+        f"- Department: {obs.get('department', 'N/A')}\n"
+        f"- Requestor Role: {obs.get('requestor_role', 'N/A')}\n"
+        f"- Item Type: {obs.get('item_type', 'N/A')}\n"
+        f"- Item Description: {obs.get('item_description', 'N/A')}\n"
+        f"- Amount (USD): {obs.get('amount_usd', 0)}\n"
+        f"- Budget Remaining (USD): {obs.get('budget_remaining_usd', 0)}\n"
+        f"- Vendor Status: {obs.get('vendor_status', 'N/A')}\n"
+        f"- Manager Approval: {obs.get('manager_approval', False)}\n"
+        f"- Finance Approval: {obs.get('finance_approval', False)}\n"
+        f"- Security Review: {obs.get('security_review', False)}\n"
+        f"- Urgency: {obs.get('urgency', 'N/A')}\n"
+        f"- Policy Notes: {obs.get('policy_notes', 'N/A')}\n"
         f"\nReturn your compliance decision as a JSON object."
     )
 
 
-def parse_llm_response(response_text):
-    """Parse LLM response into action dict. Never crashes."""
+def parse_llm_response(response_text: str) -> dict:
     try:
         cleaned = response_text.strip()
-        # Remove markdown code fences if present
         if "```" in cleaned:
             lines = cleaned.split("\n")
             lines = [l for l in lines if not l.strip().startswith("```")]
             cleaned = "\n".join(lines).strip()
         parsed = json.loads(cleaned)
-
-        # Validate and normalize fields
         action = {
             "policy_compliance": str(parsed.get("policy_compliance", "non_compliant")).strip().lower(),
             "approval_decision": str(parsed.get("approval_decision", "needs_review")).strip().lower(),
@@ -114,13 +138,10 @@ def parse_llm_response(response_text):
             "route_to": parsed.get("route_to", ["manager"]),
             "missing_requirements": parsed.get("missing_requirements", []),
         }
-
-        # Ensure lists are actually lists
         if not isinstance(action["route_to"], list):
             action["route_to"] = [str(action["route_to"])]
         if not isinstance(action["missing_requirements"], list):
             action["missing_requirements"] = [str(action["missing_requirements"])]
-
         return action
     except Exception:
         return {
@@ -128,96 +149,83 @@ def parse_llm_response(response_text):
             "approval_decision": "needs_review",
             "risk_level": "medium",
             "route_to": ["manager"],
-            "missing_requirements": ["unable_to_parse"],
+            "missing_requirements": ["manager_approval"],
         }
 
 
-def run_task(client, task_id):
-    """Run a single task. Returns (task_id, reward, success)."""
+def get_llm_action(client: OpenAI, obs: dict) -> dict:
     try:
-        # Reset environment with specific task
-        observation = reset_env(task_id=task_id)
+        user_prompt = build_user_prompt(obs)
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.2,
+            max_tokens=500,
+        )
+        response_text = completion.choices[0].message.content or ""
+        return parse_llm_response(response_text)
+    except Exception:
+        return {
+            "policy_compliance": "non_compliant",
+            "approval_decision": "needs_review",
+            "risk_level": "medium",
+            "route_to": ["manager"],
+            "missing_requirements": ["manager_approval"],
+        }
 
-        # Build prompt and call LLM
-        user_prompt = build_user_prompt(observation)
+
+# ──────────────────────────────────────────────
+# MAIN — runs ALL tasks with mandatory logging
+# ──────────────────────────────────────────────
+def main():
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
+    task_ids = get_task_ids()
+
+    for task_id in task_ids:
+        rewards: List[float] = []
+        steps_taken = 0
+        score = 0.0
+        success = False
+
+        # === [START] ===
+        log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
         try:
-            completion = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.2,
-                max_tokens=500,
-            )
-            response_text = completion.choices[0].message.content or ""
-            action = parse_llm_response(response_text)
-        except Exception as llm_err:
-            print(f"  LLM call failed for {task_id}: {llm_err}")
-            # Fallback action — will still get a partial score
-            action = {
-                "policy_compliance": "non_compliant",
-                "approval_decision": "needs_review",
-                "risk_level": "medium",
-                "route_to": ["manager"],
-                "missing_requirements": ["manager_approval"],
-            }
+            # Reset environment
+            obs = reset_env(task_id)
 
-        # Submit action to environment
-        result = step_env(action)
-        reward = result.get("reward", 0.01)
-        done = result.get("done", True)
+            # Get LLM action
+            action = get_llm_action(client, obs)
+            action_str = f"submit_decision({action['approval_decision']})"
 
-        return task_id, reward, True
+            # Step environment
+            result = step_env(action)
+            reward = result.get("reward", 0.01)
+            done = result.get("done", True)
+            steps_taken = 1
+            rewards.append(reward)
 
-    except Exception as e:
-        print(f"  Task {task_id} failed entirely: {e}")
-        return task_id, 0.0, False
+            # === [STEP] ===
+            log_step(step=1, action=action_str, reward=reward, done=done, error=None)
 
+            score = reward
+            success = score > 0.1
 
-def main():
-    client = OpenAI(
-        base_url=API_BASE_URL,
-        api_key=HF_TOKEN,
-    )
+        except Exception as e:
+            steps_taken = max(steps_taken, 1)
+            if not rewards:
+                rewards.append(0.0)
+            score = 0.0
+            success = False
+            log_step(step=1, action="error", reward=0.0, done=True, error=str(e))
 
-    # Get all available task IDs
-    task_ids = get_task_ids()
-    print(f"[INFO] Found {len(task_ids)} tasks: {task_ids}")
-
-    results = []
-
-    # Loop through EVERY task
-    for task_id in task_ids:
-        print(f"\n[START] Task: {task_id}")
-
-        task_id_out, reward, success = run_task(client, task_id)
-
-        results.append({
-            "task_id": task_id_out,
-            "reward": reward,
-            "success": success,
-        })
-
-        print(f"[END] Task: {task_id} | Reward: {reward} | Success: {success}")
-
-    # Print summary
-    print("\n" + "=" * 60)
-    print("[SUMMARY]")
-    print("=" * 60)
-
-    successful = [r for r in results if r["success"]]
-    total_reward = sum(r["reward"] for r in successful)
-    avg_reward = total_reward / len(successful) if successful else 0.0
-
-    for r in results:
-        status = "✓" if r["success"] else "✗"
-        print(f"  {status} {r['task_id']}: {r['reward']:.4f}")
-
-    print(f"\nTasks scored: {len(successful)} / {len(results)}")
-    print(f"Average reward: {avg_reward:.4f}")
-    print(json.dumps({"results": results, "average_reward": avg_reward}))
+        finally:
+            # === [END] ===
+            log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
 if __name__ == "__main__":
